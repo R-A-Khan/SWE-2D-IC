@@ -29,12 +29,7 @@ v       = v_all;
 eta     = eta_all;
 
 trend = zeros(3*Nx, Ny);
-% eta_size = size(trend(1:N,:) )
-% eta_adj_size = size(eta_adj)
-% u_size = size(u)
-% v_size = size(v)
-% u_adj_size = size(u_adj)
-% v_adj_size = size(v_adj)
+
 
 trend(1:Nx,:)        = - ( edge2mid_2D_x_vec(u) .* cent_diff_2D_vec(eta_adj, delta_x, 1) ...
                          + edge2mid_2D_y_vec(v) .* cent_diff_2D_vec(eta_adj, delta_y, 2) ...
@@ -51,8 +46,3 @@ for i = 1:length(x0_inds)
         trend(x0_inds(i), y0_inds(i)) = trend(x0_inds(i), y0_inds(i))...
         + (obs(x0_inds(i), y0_inds(i)) - eta(x0_inds(i), y0_inds(i)))/(delta_x*delta_y);
 end
-
-
-% pos = any(trend(:)>0);
-% neg = any(trend(:)<0);
-% disp([sprintf('%d',pos), '   ', sprintf('%d', neg)]);
