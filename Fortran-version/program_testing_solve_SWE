@@ -1,0 +1,450 @@
+
+!----------------------------------------------------------
+
+module procedures
+  implicit none
+
+contains
+
+ !______________________________________________________ 
+
+  function m2e_x(U, shape_U)
+
+    real, dimension(:,:), intent(in) :: U
+    integer, dimension(:) :: shape_U
+    real :: m2e_x(shape_U(1),shape_U(2))
+    
+   
+    m2e_x=0.5*(U + CSHIFT(U, SHIFT = -1, DIM = 1))
+    
+  end function m2e_x
+  
+ !______________________________________________________ 
+  
+ function m2e_y(U, shape_U)
+
+    integer, dimension(2) :: shape_U
+    real, dimension(shape_U(1),shape_U(2)), intent(in) :: U
+    real :: m2e_y(shape_U(1),shape_U(2))
+    
+   
+    m2e_y=0.5*(U + CSHIFT(U, SHIFT = -1, DIM = 2))
+    
+  end function m2e_y
+  
+ !______________________________________________________ 
+
+
+function e2m_x(U, shape_U)
+
+    integer, dimension(2) :: shape_U
+    real, dimension(shape_U(1),shape_U(2)), intent(in) :: U
+    real :: e2m_x(shape_U(1),shape_U(2))
+    
+   
+   e2m_x=0.5*(U + CSHIFT(U, SHIFT = 1, DIM = 1))
+    
+  end function e2m_x
+  
+ !______________________________________________________ 
+ 
+   function e2m_y(U, shape_U)
+
+    integer, dimension(2) :: shape_U
+    real, dimension(shape_U(1),shape_U(2)), intent(in) :: U
+    real :: e2m_y(shape_U(1),shape_U(2))
+    
+   
+   e2m_y=0.5*(U + CSHIFT(U, SHIFT = 1, DIM = 2))
+    
+  end function e2m_y
+  
+ !______________________________________________________  
+
+  function cent_diff(U, shape_U, delta, dim)
+
+    integer, dimension(2) :: shape_U
+    integer:: dim
+    real, dimension(shape_U(1),shape_U(2)), intent(in) :: U
+    real :: cent_diff(shape_U(1),shape_U(2))
+    real :: delta
+    
+   if (dim == 1) then
+  cent_diff = (CSHIFT(U, SHIFT = 1, DIM = 1)- CSHIFT(U, SHIFT = -1, DIM = 1) )/(2*delta)
+   else if (dim ==2) then
+  cent_diff = (CSHIFT(U, SHIFT = 1, DIM = 2)- CSHIFT(U, SHIFT = -1, DIM = 2) )/(2*delta)
+   else 
+   print*, "You have entered an invalid dimension"
+   end if
+    
+  end function cent_diff
+  
+ !______________________________________________________  
+  
+  function forw_diff(U, shape_U, delta, dim)
+
+    integer, dimension(2) :: shape_U
+    integer:: dim
+    real, dimension(shape_U(1),shape_U(2)), intent(in) :: U
+    real :: forw_diff(shape_U(1),shape_U(2))
+    real :: delta
+    
+   if (dim == 1) then
+   forw_diff = (CSHIFT(U, SHIFT = 1, DIM = 1) - U)/delta
+   else if (dim ==2) then
+   forw_diff = (CSHIFT(U, SHIFT = 1, DIM = 2) - U)/delta
+   else 
+   print*, "You have entered an invalid dimension"
+   end if
+    
+  end function forw_diff
+  
+ !______________________________________________________  
+ 
+   function back_diff(U, shape_U, delta, dim)
+
+    integer, dimension(2) :: shape_U
+    integer:: dim
+    real, dimension(shape_U(1),shape_U(2)), intent(in) :: U
+    real :: back_diff(shape_U(1),shape_U(2))
+    real :: delta
+    
+   if (dim == 1) then
+   back_diff = (U - CSHIFT(U, SHIFT = -1, DIM = 1) )/delta
+   else if (dim ==2) then
+   back_diff = (U - CSHIFT(U, SHIFT = -1, DIM = 2) )/delta
+   else 
+   print*, "You have entered an invalid dimension"
+   end if
+    
+  end function back_diff
+  
+ !______________________________________________________    
+ 
+end module
+
+
+!----------------------------------------------------------
+
+
+module SWEandAdjointSolvers
+
+USE procedures
+
+contains
+
+function solve_swe(U0, shape_U0, delta_x, delta_y)
+integer, dimension(2) :: shape_U0
+real, dimension(shape_U0(1),shape_U0(2)), intent(in) :: U0
+real, intent(in) :: delta_x, delta_y
+real :: solve_swe(shape_U0(1),shape_U0(2))
+
+!local variables only within scope of function
+integer :: Nx, Ny
+real, dimension((shape_U0(1))/3,shape_U0(2)) :: eta, u, v
+
+Nx = (shape_U0(1))/3
+Ny = shape_U0(2)
+
+
+eta = U0(1:Nx,1:Ny)
+u = U0(Nx+1:2*Nx, 1:Ny)
+v = U0(2*Nx+1:3*Nx, 1:Ny)
+
+solve_swe(1:Nx,1:Ny) = - (  forw_diff( (m2e_x( 1+eta,(/Nx,Ny/) )*u) , (/Nx,Ny/), delta_x, 1) &
+                          + forw_diff( (m2e_y( 1+eta,(/Nx,Ny/) )*v) , (/Nx,Ny/), delta_y, 2)  )
+
+solve_swe(Nx+1:2*Nx,1:Ny) = - back_diff(eta,(/Nx,Ny/), delta_x, 1 )  &
+                            - back_diff(  0.5*( e2m_x(u**2, (/Nx,Ny/)) + e2m_y(v**2,(/Nx,Ny/) ) )  , (/Nx,Ny/), delta_x, 1  ) & 
+                            + (1/m2e_x( 1+eta,(/Nx,Ny/) ) )*( back_diff( e2m_y(v,(/Nx,Ny/) ), (/Nx,Ny/), delta_x, 1 ) & 
+                            - cent_diff(u, (/Nx,Ny/), delta_y,2) ) &
+                            * ( e2m_y( ( m2e_x( ( m2e_y(1+eta,(/Nx,Ny/))*v), (/Nx,Ny/) ) ),  (/Nx,Ny/) ))
+
+solve_swe(2*Nx+1:3*Nx,1:Ny) = - back_diff(eta,(/Nx,Ny/), delta_y, 2 )  &
+                              - back_diff(  0.5*( e2m_x(u**2, (/Nx,Ny/)) + e2m_y(v**2,(/Nx,Ny/) ) ) , (/Nx,Ny/), delta_y, 2  ) &
+                              - (1/m2e_y( 1+eta,(/Nx,Ny/) ) )*( cent_diff(v, (/Nx,Ny/), delta_x,1) & 
+                              - back_diff( e2m_x(u,(/Nx,Ny/) ), (/Nx,Ny/), delta_y, 2 ) ) &
+                              * ( e2m_x( (m2e_y( (m2e_x(1+eta,(/Nx,Ny/) )*u), (/Nx,Ny/) ) ), (/Nx,Ny/) ) )
+
+
+
+end function solve_swe
+
+ !______________________________________________________  
+
+function solve_swe_adj(U0, shape_U0, delta_x, delta_y, x0_inds, y0_inds, obs, u_all, v_all, eta_all)
+
+! Variable declaration
+integer, dimension(2) :: shape_U0
+integer :: Nx, Ny, i
+integer, dimension(:), intent(in) :: x0_inds, y0_inds
+real, dimension(shape_U0(1),shape_U0(2)), intent(in) :: U0
+real, dimension(shape_U0(1)/3,shape_U0(2)), intent(in) :: u_all, v_all, eta_all
+real, dimension(:,:), intent(in) :: obs
+real, intent(in) :: delta_x, delta_y
+real :: solve_swe_adj(shape_U0(1),shape_U0(2))
+real, dimension(shape_U0(1)/3,shape_U0(2)):: eta_adj, u_adj, v_adj
+
+
+Nx = shape_U0(1)/3
+Ny = shape_U0(2)
+
+eta_adj = U0(1:Nx, 1:Ny)
+u_adj = U0(Nx+1:2*Nx, 1:Ny)
+v_adj = U0(2*Nx+1:3*Nx, 1:Ny)
+
+
+solve_swe_adj(1:Nx,1:Ny) =  - ( e2m_x(u_all, (/Nx,Ny/)) * cent_diff(eta_adj, (/Nx,Ny/), delta_x, 1) &
+                              + e2m_y(v_all, (/Nx,Ny/)) * cent_diff(eta_adj, (/Nx,Ny/), delta_y, 2) &
+                              + forw_diff(u_adj, (/Nx,Ny/), delta_x, 1) + forw_diff(v_adj, (/Nx,Ny/), delta_y, 2) )
+
+solve_swe_adj(Nx+1:2*Nx,1:Ny) = - ( u_all * cent_diff(u_adj, (/Nx,Ny/), delta_x, 1) &
+                                  + m2e_x( e2m_y( v_all, (/Nx,Ny/) ), (/Nx,Ny/) ) * cent_diff(u_adj, (/Nx,Ny/), delta_y, 2) &
+                                  + (1 + m2e_x(eta_all, (/Nx,Ny/) ) ) * back_diff(eta_adj, (/Nx,Ny/), delta_x, 1) )
+
+
+solve_swe_adj(2*Nx+1:3*Nx,1:Ny) = - ( v_all * cent_diff(v_adj, (/Nx,Ny/), delta_y, 2) &
+                                  + e2m_x( m2e_y( u_all, (/Nx,Ny/) ), (/Nx,Ny/) ) * cent_diff(u_adj, (/Nx,Ny/), delta_y, 2) &
+                                  + (1 + m2e_y(eta_all, (/Nx,Ny/) ) ) * back_diff(eta_adj, (/Nx,Ny/), delta_y, 2) )
+
+
+end function solve_swe_adj
+
+end module
+
+!----------------------------------------------------------
+
+
+
+
+Module RungeKuttaSolvers
+USE SWEandAdjointSolvers
+
+contains
+
+ 
+subroutine RK34_FW(dt, tRange, func, Y0, shapeY0, delta_x, delta_y, sol, tSol)
+implicit none
+
+external :: func
+real, intent(in) :: dt, delta_x, delta_y
+real, dimension(2), intent(in) :: tRange
+integer, dimension(2), intent(in) :: shapeY0
+real, dimension(:,:), intent(in) :: Y0
+
+real, allocatable, intent(out) :: sol(:,:,:)
+real, allocatable, dimension(:), intent(out) :: tSol
+
+
+
+! local variables
+integer :: k, numSteps, Nx, Ny
+integer, dimension(2):: sizeY0
+real, dimension(4,4):: alpha, beta
+real, allocatable, dimension(:,:) :: U0, U1, U2, U3, U4 
+
+alpha = reshape( (/1,   0,   0,  0, &
+                   0,   1,   0,  0, &
+                 2/3,   0, 1/3,  0, &
+                   0,   0,   0,  1 /), (/4,4/) )
+                   
+beta = reshape( (/1/2,    0,   0,   0, &
+                    0,  1/2,   0,   0, &
+                  2/3,    0, 1/6,   0, &
+                    0,    0,   0, 1/2 /), (/4,4/) )                  
+
+numSteps = floor ( abs( (tRange(2) - tRange(1))/dt ))
+
+Nx = shapeY0(1)
+Ny = shapeY0(2)
+
+allocate(tSol(numSteps+1), sol(Nx,Ny, numSteps+1), U0(Nx,Ny), &
+U1(Nx,Ny), U2(Nx,Ny), U3(Nx,Ny), U4(Nx,Ny))
+
+sol(1:Nx,1:Ny,1) = Y0
+tSol(1) = tRange(1)
+
+do k = 1, numStep
+    tSol(k+1) = tSol(k) + dt
+
+    U0 = sol(Nx,Ny,k)
+    U1 = alpha(1,1)*U0                 + dt*beta(1,1)*func(U0, shape(U0), delta_x, delta_y)
+    U2 = alpha(2,2)*U1                 + dt*beta(2,2)*func(U1, shape(U1), delta_x, delta_y)
+    U3 = alpha(3,1)*U0 + alpha(3,3)*U2 + dt*beta(3,3)*func(U2, shape(U2), delta_x, delta_y)
+    U4 = alpha(4,4)*U3                 + dt*beta(4,4)*func(U3, shape(U3), delta_x, delta_y)
+sol(1:Nx, 1:Ny, k+1) = U4
+end do
+
+
+end subroutine RK34_FW
+
+!______________________________________________________ 
+
+subroutine RK34_BW(dt, tRange, func, Y0, shapeY0, delta_x, delta_y, obs, x0_inds, y0_inds, u_all, v_all, eta_all, sol, tSol)
+implicit none
+
+external :: func
+real, intent(in) :: dt, delta_x, delta_y
+real, dimension(2), intent(in) :: tRange
+integer, dimension(2), intent(in) :: shapeY0
+real, dimension(:,:), intent(in) :: Y0
+integer, dimension(:), intent(in) :: x0_inds, y0_inds
+real,  dimension(shapeY0(1)/3,shapeY0(2)), intent(in) :: u_all, v_all, eta_all
+real, dimension(:,:), intent(in) :: obs
+
+real, allocatable, dimension(:,:,:), intent(out) :: sol
+real, allocatable, dimension(:), intent(out) :: tSol
+
+
+
+! local variables
+integer :: k, numSteps, Nx, Ny
+integer, dimension(2):: sizeY0
+real, dimension(4,4):: alpha, beta
+real, allocatable, dimension(:,:) :: U0, U1, U2, U3, U4 
+
+alpha = reshape( (/1,   0,   0,  0, &
+                   0,   1,   0,  0, &
+                 2/3,   0, 1/3,  0, &
+                   0,   0,   0,  1 /), (/4,4/) )
+                   
+beta = reshape( (/1/2,    0,   0,   0, &
+                    0,  1/2,   0,   0, &
+                  2/3,    0, 1/6,   0, &
+                    0,    0,   0, 1/2 /), (/4,4/) )                  
+
+numSteps = floor ( abs( (tRange(2) - tRange(1))/dt ))
+
+Nx = shapeY0(1)
+Ny = shapeY0(2)
+
+allocate( tSol(numSteps+1), sol(Nx,Ny, numSteps+1), &
+U0(Nx,Ny), U1(Nx,Ny), U2(Nx,Ny), U3(Nx,Ny), U4(Nx,Ny) )
+
+sol(1:Nx,1:Ny,1) = Y0
+tSol(1) = tRange(1)
+
+do k = 1, numStep
+    tSol(k+1) = tSol(k) + dt
+
+    U0 = sol(Nx,Ny,k)
+    U1 = alpha(1,1)*U0  & 
+    + dt*beta(1,1)*func(U0, shape(U0), delta_x, delta_y, x0_inds, y0_inds, obs, u_all, v_all, eta_all)
+    U2 = alpha(2,2)*U1  & 
+    + dt*beta(2,2)*func(U1, shape(U1), delta_x, delta_y, x0_inds, obs, u_all, v_all, eta_all)
+    U3 = alpha(3,1)*U0 + alpha(3,3)*U2 &
+    + dt*beta(3,3)*func(U2, shape(U2), delta_x, delta_y, x0_inds, y0_inds, obs, u_all, v_all, eta_all)
+    U4 = alpha(4,4)*U3   &
+    + dt*beta(4,4)*func(U3, shape(U3), delta_x, delta_y, x0_inds, y0_inds, obs, u_all, v_all, eta_all)
+sol(1:Nx, 1:Ny, k+1) = U4
+end do
+
+
+end subroutine RK34_BW
+
+!______________________________________________________ 
+
+end module
+
+
+
+module FWandBWSolvers
+contains RungeKuttaSolvers
+
+subroutine FW_Solve_2D(dt, tRange, func, Y0, shapeY0, delta_x, delta_y, sol, tSol)
+implicit none 
+external :: func
+real, intent(in) :: dt, delta_x, delta_y
+real, dimension(2), intent(in) :: tRange
+integer, dimension(2), intent(in) :: shapeY0
+real, dimension(:,:), intent(in) :: Y0
+real,  dimension(:,:,:), intent(out) :: sol
+real,  dimension(:), intent(out) :: tSol
+
+
+call RK34_FW(dt, tRange, func, Y0, shapeY0, delta_x, delta_y, sol, tSol)
+end subroutine FW_Solve_2D
+
+!______________________________________________________ 
+
+
+subroutine BW_Solve_2D(dt, tRange, func, Y0, shapeY0, delta_x, delta_y, obs, x0_inds, y0_inds, u_all, v_all, eta_all, sol, tSol, b)
+implicit none
+
+external :: func
+real, intent(in) :: dt, delta_x, delta_y
+real, dimension(2), intent(in) :: tRange
+integer, dimension(2), intent(in) :: shapeY0
+real, dimension(:,:), intent(in) :: Y0
+integer, dimension(:), intent(in) :: x0_inds, y0_inds
+real, allocatable, dimension(:,:), intent(in) :: u_all, v_all, eta_all
+real, dimension(:,:), intent(in) :: obs_all
+
+real,  dimension(:,:,:), intent(out) :: sol
+real,  dimension(:), intent(out) :: tSol
+real,  allocatable, dimension(:,:,:)
+
+!Local variable declaration
+
+real, allocatable, dimension(:,:,:) :: obs_tau, u_all_tau, v_all_tau, eta_all_tau
+integer, dimension(3) :: shape_u_all
+integer:: Nx, Ny, T, tau, i
+
+shape_u_all = shape(u_all)
+Nx = shape_u_all(1)
+Ny = shape_u_all(2)
+T  = shape_u_all(3)
+
+allocate(obs_tau(Nx,Ny,T), u_all_tau(Nx,Ny,T), v_all_tau(Nx,Ny,T), eta_all_tau(Nx,Ny,T), b(Nx,Ny,T) )
+
+tau = T
+do i = 1, T
+    obs_tau(1:Nx, 1:Ny, i) = obs_tau(1:Nx, 1:Ny, tau); 
+    u_all_tau(1:Nx, 1:Ny, i) = u_all_tau(1:Nx, 1:Ny, tau); 
+    v_all_tau(1:Nx, 1:Ny, i) = v_all_tau(1:Nx, 1:Ny, tau); 
+    eta_all_tau(1:Nx, 1:Ny, i) = eta_all_tau(1:Nx, 1:Ny, tau); 
+    tau = tau -1
+end do
+
+
+call RK34_BW(dt, tRange, func, Y0, shapeY0, delta_x, delta_y, obs, x0_inds, y0_inds, u_all, v_all, eta_all, sol, tSol)
+
+b = Y0(1:Nx,1:Ny, T)
+
+end subroutine BW_Solve_2D
+!______________________________________________________ 
+
+end module
+
+
+
+
+
+
+!----------------------------------------------------------
+
+
+
+program test
+    use SWEandAdjointSolvers
+
+    implicit none
+     real, dimension(6,3) :: a, edge_a
+     real:: stepsize_x, stepsize_y
+     !integer:: dimension
+     
+    
+    a = reshape((/ 1,3,3,5,4,7,2,6,5,8,1,4,3,9,2,9,1,11/),(/6,3/))
+    stepsize_x = 3
+    stepsize_y = 6
+
+   ! shape_a = shape(a)
+    edge_a = solve_SWE(a, shape(a), stepsize_x, stepsize_y)
+
+    
+    print*, "this is the output from function solve_swe"
+    print*,  edge_a !reshape(edge_a, (/4,3/))
+ 
+
+    
+end program
