@@ -156,14 +156,14 @@ DO jtrial =1, ntrial
 
 	    
 	!Smooth gradient
-	!if smooth_grad
-	!    for k = 1:Ny
-	!        grad_J(:,k) = grad_smooth(grad_J(:,k),filt);
-	!    end
-	!    for l = 1:Nx
-	!        grad_J(l,:) = grad_smooth(grad_J(l,:),filt);
-	!    end
-	!end
+	if smooth_grad
+	    for k = 1:Ny
+	        grad_J(:,k) = grad_smooth(grad_J(:,k),filt);
+        end
+        for l = 1:Nx
+	        grad_J(l,:) = grad_smooth(grad_J(l,:),filt);
+	    end
+	end
 
 	!Compute Cost Function
 	cost_x = 0
@@ -175,10 +175,8 @@ DO jtrial =1, ntrial
 
 	cost(1,jtrial) = integral(T,0.5*cost_x) ! Get trapz first
 	grad(1,jtrial) = norm2(grad_J);
-	! CHECK THIS GIVES CORRECT NORM
-	!****************************************************************************************
-    error(1,jtrial)  = norm2(eta_exct0-eta0(:,:,1))/norm2(eta_exct0)
-    !****************************************************************************************
+
+    	error(1,jtrial)  = norm2(eta_exct0-eta0(:,:,1))/norm2(eta_exct0)
 
     ! Initial estimate for gradient descent stepsize
   	tau_n = 1.D-2
@@ -251,10 +249,10 @@ DO jtrial =1, ntrial
 
         print*, iter,"	", tau_n, norm2(grad_J),"	", norm2(eta_exct0-eta_optimum)/norm2(eta_exct0)
     
-		! DEALLOCATE EVERTHING IN WHILE LOOP
+		! DEALLOCATE EVERTHING IN WHILE LOOP ********************
 	END DO 
 
-! DEALLOCATE everything in jtrial loop
+! DEALLOCATE everything in jtrial loop *************************
 END do
 n_iter = iter + 1
 
@@ -330,12 +328,12 @@ write(20)  tau_n
 
 
 ! DON'T FORGET TO DEALLOCATE ALL THE DYNAMIC VARIABLES
-!deallocate( sol_exct(3*Nx,Ny,Nt) , sol_distorted(3*Nx,Ny,Nt), sol_opt(3*Nx,Ny,Nt), T_opt(Nt), T_obs(Nt), T_d(Nt) )
-!deallocate( obs_eta(Nx, Ny, Nt), obs(size(x0_inds), size(T_obs)) )
-!deallocate( eta_all(Nx,Ny,Nt), u_all(Nx,Ny,Nt), v_all(Nx,Ny,Nt), eta_x0(size(x0_inds), size(T_obs)) , &
-!		 eta_x0_opt(size(x0_inds), size(T_obs)) )
-!deallocate( Yb(3*Nx,Ny,Nt), Tb(Nt), eta_adj_t0(Nx,Ny), grad_J(Nx,Ny) )
-!deallocate(cost_x(Nt), cost_opt(Nt))
+deallocate( sol_exct(3*Nx,Ny,Nt) , sol_distorted(3*Nx,Ny,Nt), sol_opt(3*Nx,Ny,Nt), T_opt(Nt), T_obs(Nt), T_d(Nt) )
+deallocate( obs_eta(Nx, Ny, Nt), obs(size(x0_inds), size(T_obs)) )
+deallocate( eta_all(Nx,Ny,Nt), u_all(Nx,Ny,Nt), v_all(Nx,Ny,Nt), eta_x0(size(x0_inds), size(T_obs)) , &
+		 eta_x0_opt(size(x0_inds), size(T_obs)) )
+deallocate( Yb(3*Nx,Ny,Nt), Tb(Nt), eta_adj_t0(Nx,Ny), grad_J(Nx,Ny) )
+deallocate(cost_x(Nt), cost_opt(Nt))
    
    
 end program data_assimil_2D_Feb2020
